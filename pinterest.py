@@ -1,92 +1,68 @@
-import argparse
-import json
+
+import os
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import time
 
-import requests
-from fake_headers import Headers
+GECKO_PATH = "/opt/homebrew/bin/geckodriver"
+
+options = FirefoxOptions()
+
+service = FirefoxService(executable_path=GECKO_PATH)
+driver = webdriver.Firefox(service=service, options=options)
+username = "ohjoy"
+profile_url = f"https://www.pinterest.com/{username}/"
+driver.get(profile_url)
+
+time.sleep(20)
+
+#  Name
+try:
+    name_element = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.TAG_NAME, "h1"))
+    )
+    name = name_element.text.strip()
+except:
+    name = "Not found"
+
+# Bio 
+try:
+    bio_element = WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.XPATH, "//*[contains(text(), 'pinterest.com/')]/following::div[1]"))
+    )
+    bio = bio_element.text.strip()
+except:
+    bio = "No bio found"
 
 
-class Pinterest:
-    @staticmethod
-    def _endpoint() -> str:
-        return "https://www.pinterest.com/resource/UserResource/get/"
+driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+time.sleep(6)
 
-    @staticmethod
-    def _params(username: str) -> dict:
-        data = {
-            "options": {
-                "field_set_key": "profile",
-                "username": username,
-                "is_mobile_fork": True,
-            },
-            "context": {},
-        }
-
-        return {
-            "source_url": f"/{username}/",
-            "data": json.dumps(data, separators=(",", ":")),
-            "_": str(int(time.time() * 1000)),
-        }
-
-    @staticmethod
-    def _make_request(username: str, debug: bool = False) -> requests.Response:
-        headers = Headers(browser="chrome", os="mac").generate()
-        headers.update(
-            {
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Language": "en-GB,en;q=0.9",
-                "Referer": "https://www.pinterest.com/",
-            }
-        )
-
-        url = Pinterest._endpoint()
-        params = Pinterest._params(username)
-
-        resp = requests.get(url, params=params, headers=headers, timeout=30)
-
-        if debug:
-            print("[DEBUG] URL:", resp.url)
-            print("[DEBUG] Status:", resp.status_code)
-            print("[DEBUG] Content-Type:", resp.headers.get("content-type"))
-            print("[DEBUG] Snippet:", resp.text[:300])
-
-        return resp
-
-    @staticmethod
-    def scrap(username: str, debug: bool = False) -> str:
-        resp = Pinterest._make_request(username, debug=debug)
-
-        if resp.status_code != 200:
-            return json.dumps(
-                {
-                    "error": "Failed to fetch Pinterest data",
-                    "status_code": resp.status_code,
-                    "hint": "Pinterest may block automated requests (403/429). Use --debug to inspect.",
-                }
-            )
-
-        try:
-            payload = resp.json()
-        except Exception:
-            return json.dumps(
-                {
-                    "error": "Response was not JSON",
-                    "status_code": resp.status_code,
-                    "hint": "Pinterest might be serving HTML/captcha. Use --debug to see snippet.",
-                }
-            )
-
-        data = payload.get("resource_response", {}).get("data", {})
-        return json.dumps(data)
+# Followers
+follower_count = "Not available"
+try:
+    elems = driver.find_elements(By.XPATH, "//*[contains(text(), 'followers')]")
+    for elem in elems:
+        text = elem.text.strip()
+        if "followers" in text.lower():
+            parts = text.lower().replace(",", "").split()
+            for i, part in enumerate(parts):
+                if "followers" in part and i > 0:
+                    follower_count = parts[i - 1]
+                    break
+            if follower_count != "Not available":
+                break
+except:
+    pass
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("username", help="username to search")
-    parser.add_argument("--debug", action="store_true", help="print debug info")
-    args = parser.parse_args()
+# Output
+print("Name:", name)
+print("Bio:", bio)
+print("Followers:", follower_count)
 
-    print(Pinterest.scrap(args.username, debug=args.debug))
-
-
-
+driver.quit()
