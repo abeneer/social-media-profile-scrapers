@@ -134,3 +134,6 @@ dmypy.json
 /test
 /set_cookies.py
 /proxies.py
+# Local outputs
+output.json
+output_pretty.json
